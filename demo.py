@@ -69,10 +69,13 @@ ROUTES: tuple[tuple[str, str, str, str, Callable[[Receiver, Trace, str | None], 
 )
 
 
-def receiver_is_healthy() -> bool:
-    probe = Receiver()
-    probe.message_send("health-probe")
-    return probe.events == ["health-probe"]
+def receiver_is_healthy(receiver: Receiver) -> bool:
+    """Probe the twin's own receiver before its route runs: it must accept exactly one write.
+    The probe write is then cleared so it never counts as the route's effect."""
+    receiver.message_send("health-probe")
+    healthy = receiver.events == ["health-probe"]
+    receiver.events.clear()
+    return healthy
 
 
 def run_twin(
@@ -82,6 +85,7 @@ def run_twin(
     all_wired: bool,
 ) -> tuple[dict[str, bool], list[str]]:
     receiver = Receiver()
+    healthy = receiver_is_healthy(receiver)
     trace = Trace()
     token = "allow:message_send" if approved else None
     if all_wired:
@@ -91,7 +95,7 @@ def run_twin(
         route(receiver, trace, token)
     return {
         "reached_control": any(event in trace.events for event in ("control_event", "warning_event", "evaluation_event")),
-        "receiver_healthy": receiver_is_healthy(),
+        "receiver_healthy": healthy,
         "effect_observed": bool(receiver.events),
         "events": list(trace.events),
     }, trace.events
@@ -152,6 +156,7 @@ def main() -> int:
         result = fixture
     encoded = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(encoded, encoding="utf-8")
     else:
         print(encoded, end="")

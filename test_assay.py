@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""DNW detector suite: one exact base case, one conformant twin, eleven hostile cases.
+"""DNW detector suite: one exact base case, one label-free case, one conformant twin, and
+hostile cases (including malformed input).
 
 Every expectation is exact: the full path->state map, the full defect list. No set-membership
 or prefix matching (the v0.1 looseness), so a wrong-but-plausible result cannot pass.
+
+Run either way:  python3 test_assay.py   or   python3 -m unittest -v
+Checks raise AssertionError explicitly, so they still check under `python -O`.
 """
 
 from __future__ import annotations
@@ -10,6 +14,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import sys
+import unittest
 from pathlib import Path
 
 from validate_assay import classify
@@ -17,22 +23,30 @@ from validate_assay import classify
 ROOT = Path(__file__).parent
 BASE_RAW = (ROOT / "fixture.json").read_bytes()
 BASE = json.loads(BASE_RAW)
-RESULTS: list[str] = []
+CASES: list[tuple[str, object, dict]] = []
 
 
-def check(name: str, data: dict, *, validation: str, conformance: str,
-          states: dict | None = None, defects: list | None = None) -> None:
+def ensure(condition: bool, detail) -> None:
+    if not condition:
+        raise AssertionError(detail)
+
+
+def run_case(name: str, data, validation: str, conformance: str,
+             states: dict | None = None, defects: list | None = None) -> None:
     raw = json.dumps(data, sort_keys=True).encode()
     r = classify(data, raw)
-    assert r["source_sha256"] == hashlib.sha256(raw).hexdigest(), (name, r)
-    assert r["validation"] == validation, (name, r)
-    assert r["conformance"] == conformance, (name, r)
+    ensure(r["source_sha256"] == hashlib.sha256(raw).hexdigest(), (name, r))
+    ensure(r["validation"] == validation, (name, r))
+    ensure(r["conformance"] == conformance, (name, r))
     if states is not None:
-        assert r["path_states"] == states, (name, r["path_states"])
+        ensure(r["path_states"] == states, (name, r["path_states"]))
     if defects is not None:
-        assert r["defects"] == sorted(defects), (name, r["defects"])
-    RESULTS.append(name)
-    print(f"PASS {name}")
+        ensure(r["defects"] == sorted(defects), (name, r["defects"]))
+
+
+def check(name: str, data, **expect) -> None:
+    """Register a case; it runs under unittest (AssayCases) or `python3 test_assay.py`."""
+    CASES.append((name, data, expect))
 
 
 def mutate(fn) -> dict:
@@ -140,5 +154,24 @@ check("hostile-outward-effect-enabled",
       mutate(lambda d: d["authority"].__setitem__("network", True)),
       validation="INVALID", conformance="INDETERMINATE", defects=["EFFECT_TRUE_NETWORK"])
 
-hostile = [n for n in RESULTS if n.startswith("hostile-")]
-print(f"{len(RESULTS)}/{len(RESULTS)} PASS ({len(hostile)} hostile, 1 base, 1 label-free, 1 conformant twin)")
+# Hostile 9-10: malformed input must classify INVALID, never crash the detector.
+check("hostile-top-level-list", [BASE], validation="INVALID", conformance="INDETERMINATE")
+check("hostile-malformed-path-fields",
+      mutate(lambda d: d["paths"][0].update(allow_twin=None, deny_twin=[], evidence="receiver_event")),
+      validation="INVALID", conformance="INDETERMINATE")
+
+
+class AssayCases(unittest.TestCase):
+    def test_every_case(self):
+        for name, data, expect in CASES:
+            with self.subTest(name):
+                run_case(name, data, **expect)
+
+
+if __name__ == "__main__":
+    for name, data, expect in CASES:
+        run_case(name, data, **expect)
+        print(f"PASS {name}")
+    hostile = [n for n, _, _ in CASES if n.startswith("hostile-")]
+    print(f"{len(CASES)}/{len(CASES)} PASS ({len(hostile)} hostile, 1 base, 1 label-free, 1 conformant twin)")
+    sys.exit(0)

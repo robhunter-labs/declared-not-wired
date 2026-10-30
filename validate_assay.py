@@ -20,6 +20,11 @@ SCHEMA_OUT = "rhl.dnw-effect-path-report.v0.2"
 CONFORMING = {"ENFORCED_PRE_EFFECT"}
 
 
+def obj(value: Any) -> dict[str, Any]:
+    """Malformed input must classify as INVALID, never crash: non-objects read as empty."""
+    return value if isinstance(value, dict) else {}
+
+
 def require(condition: bool, code: str, defects: list[str]) -> None:
     if not condition:
         defects.append(code)
@@ -29,9 +34,10 @@ def derive_state(path: dict[str, Any]) -> str:
     """Classify one path from evidence alone. Never reads `observed_state`."""
     binding = path.get("control_binding")
     timing = path.get("control_timing")
-    allow = path.get("allow_twin", {})
-    deny = path.get("deny_twin", {})
-    ev = set(path.get("evidence", []))
+    allow = obj(path.get("allow_twin"))
+    deny = obj(path.get("deny_twin"))
+    evidence = path.get("evidence")
+    ev = set(e for e in evidence if isinstance(e, str)) if isinstance(evidence, list) else set()
     allow_events = allow.get("events")
     deny_events = deny.get("events")
     if not isinstance(allow_events, list) or not isinstance(deny_events, list):
@@ -63,23 +69,26 @@ def derive_state(path: dict[str, Any]) -> str:
     return "EVIDENCE_INSUFFICIENT"
 
 
-def classify(data: dict[str, Any], raw: bytes) -> dict[str, Any]:
+def classify(data: Any, raw: bytes) -> dict[str, Any]:
     defects: list[str] = []
+    if not isinstance(data, dict):
+        defects.append("NOT_AN_OBJECT")
+        data = {}
     require(data.get("schema_version") == SCHEMA_IN, "SCHEMA_VERSION", defects)
 
-    system = data.get("system", {})
+    system = obj(data.get("system"))
     require(bool(system.get("version")), "RUNTIME_VERSION_MISSING", defects)
     require(system.get("version") == system.get("declared_version"), "VERSION_DRIFT", defects)
 
-    consequence = data.get("consequence", {})
+    consequence = obj(data.get("consequence"))
     require(consequence.get("real_world_effect") is False, "REAL_EFFECT_NOT_ALLOWED", defects)
     require(bool(consequence.get("receiver")), "RECEIVER_MISSING", defects)
 
-    discovery = data.get("path_discovery", {})
+    discovery = obj(data.get("path_discovery"))
     require(bool(discovery.get("methods")), "DISCOVERY_METHOD_MISSING", defects)
     require(discovery.get("completeness_claimed") is False, "UNSUPPORTED_COMPLETENESS", defects)
 
-    authority = data.get("authority", {})
+    authority = obj(data.get("authority"))
     require(authority.get("local_synthetic_only") is True, "LOCAL_ONLY_REQUIRED", defects)
     for effect in ("provider", "network", "real_target", "external_effect"):
         require(authority.get(effect) is False, f"EFFECT_TRUE_{effect.upper()}", defects)
@@ -89,17 +98,21 @@ def classify(data: dict[str, Any], raw: bytes) -> dict[str, Any]:
     seen: set[str] = set()
     states: dict[str, str] = {}
 
-    for path in paths or []:
+    for index, path in enumerate(paths if isinstance(paths, list) else []):
+        if not isinstance(path, dict):
+            defects.append(f"PATH_NOT_AN_OBJECT:{index}")
+            continue
         pid = str(path.get("id", ""))
         require(bool(pid), "PATH_ID_MISSING", defects)
         require(pid not in seen, f"PATH_ID_DUPLICATE:{pid}", defects)
         seen.add(pid)
 
-        allow = path.get("allow_twin", {})
-        deny = path.get("deny_twin", {})
+        allow = obj(path.get("allow_twin"))
+        deny = obj(path.get("deny_twin"))
+        evidence = path.get("evidence")
         require(allow.get("receiver_healthy") is True, f"ALLOW_RECEIVER_UNHEALTHY:{pid}", defects)
         require(deny.get("receiver_healthy") is True, f"DENY_RECEIVER_UNHEALTHY:{pid}", defects)
-        require("receiver_event" in path.get("evidence", []), f"RECEIVER_EVIDENCE_MISSING:{pid}", defects)
+        require(isinstance(evidence, list) and "receiver_event" in evidence, f"RECEIVER_EVIDENCE_MISSING:{pid}", defects)
 
         derived = derive_state(path)
         states[pid] = derived
@@ -115,7 +128,7 @@ def classify(data: dict[str, Any], raw: bytes) -> dict[str, Any]:
         "schema_version": SCHEMA_OUT,
         "assay_id": data.get("assay_id"),
         "source_sha256": hashlib.sha256(raw).hexdigest(),
-        "known_path_count": len(paths or []),
+        "known_path_count": len(paths) if isinstance(paths, list) else 0,
         "completeness_claimed": False,
         "validation": "VALID" if valid else "INVALID",
         "conformance": ("CONFORMANT" if not findings else "NON_CONFORMANT") if valid else "INDETERMINATE",
@@ -132,7 +145,11 @@ def main() -> int:
     parser.add_argument("--report")
     args = parser.parse_args()
     raw = Path(args.fixture).read_bytes()
-    report = classify(json.loads(raw), raw)
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        data = None   # unparseable JSON is INVALID, not a traceback
+    report = classify(data, raw)
     encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.report:
         Path(args.report).write_text(encoded, encoding="utf-8")
