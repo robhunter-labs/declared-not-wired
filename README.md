@@ -1,6 +1,8 @@
-# Declared, Not Wired — a four-route example
+# Declared, Not Wired: A four-route example
 
 **Status: Built, not exercised.** A runnable synthetic example with its own tests; it hasn't been run against any real agent framework. Companion to [*Declared, Not Wired*](https://robhunterworks.com/writing/declared-not-wired/). More studies are indexed in [ai-security-field-lab](https://github.com/robhunter-labs/ai-security-field-lab).
+
+When someone tells me a guardrail is on, the follow-up I've learned to ask is: on which path, before which effect, and how do you know? I learned it from my own early work with agents. If I had described a control clearly and the build could show me where that control lived, I sometimes treated the behavior as present without following every path far enough to prove the system used it.
 
 An approval check can exist in a system without standing between every route and the effect it is meant to control. This small Python example makes that difference visible at one in-memory receiver.
 
