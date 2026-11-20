@@ -1,6 +1,6 @@
 # Declared, Not Wired: A four-route example
 
-**Status: Built, not exercised.** A runnable synthetic example with its own tests; it hasn't been run against any real agent framework. Companion to [*Declared, Not Wired*](https://robhunterworks.com/writing/declared-not-wired/). More studies are indexed in [ai-security-field-lab](https://github.com/robhunter-labs/ai-security-field-lab).
+**Status: Checked on the included synthetic fixture.** A runnable example with its own tests: the first command below shows the expected result in about a second. It hasn't been run against any real agent framework, so it says nothing about one. Companion to [*Declared, Not Wired*](https://robhunterworks.com/writing/declared-not-wired/). More studies are indexed in [ai-security-field-lab](https://github.com/robhunter-labs/ai-security-field-lab).
 
 When someone tells me a guardrail is on, the follow-up I've learned to ask is: on which path, before which effect, and how do you know? I learned it from my own early work with agents. If I had described a control clearly and the build could show me where that control lived, I sometimes treated the behavior as present without following every path far enough to prove the system used it.
 
@@ -43,4 +43,4 @@ python3 test_assay.py                      # lists each detector case: 16/16, 13
 
 Copyright © 2026 Rob Hunter. Original code is released under the MIT license in `LICENSE`; references to third-party frameworks in the essay are for context, not an affiliation or validation claim.
 
-Found a route this misses, or a framework where the question lands differently? Open an issue. I'd like to hear it.
+Found a route this misses, or a framework where the question lands differently? [Open an issue](https://github.com/robhunter-labs/declared-not-wired/issues); that is where corrections and questions live. For anything sensitive, use the route in [SECURITY.md](SECURITY.md). I'd like to hear it.
