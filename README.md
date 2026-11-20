@@ -1,16 +1,18 @@
 # Declared, Not Wired: A four-route example
 
-**Status: Checked on the included synthetic fixture.** A runnable example with its own tests: the first command below shows the expected result in about a second. It hasn't been run against any real agent framework, so it says nothing about one. Companion to [*Declared, Not Wired*](https://robhunterworks.com/writing/declared-not-wired/). More studies are indexed in [ai-security-field-lab](https://github.com/robhunter-labs/ai-security-field-lab).
+**Status: Checked on the included synthetic fixture.** A runnable example with its own tests: the first command below shows the expected result in about a second. It uses no network, provider SDK, external message, real target, or platform emulator, and it hasn't been run against any real agent framework, so it says nothing about one. Companion to [*Declared, Not Wired*](https://robhunterworks.com/writing/declared-not-wired/). More studies are indexed in [ai-security-field-lab](https://github.com/robhunter-labs/ai-security-field-lab).
 
 When someone tells me a guardrail is on, the follow-up I've learned to ask is: on which path, before which effect, and how do you know? I learned it from my own early work with agents. If I had described a control clearly and the build could show me where that control lived, I sometimes treated the behavior as present without following every path far enough to prove the system used it.
 
-An approval check can exist in a system without standing between every route and the effect it is meant to control. This small Python example makes that difference visible at one in-memory receiver.
+An approval check can exist in a system without standing between every route and the effect it is meant to control. This small Python example makes that difference visible at one in-memory receiver. Of its four local routes, only the function tool enforces approval before the effect. The other three each show a different way a check can be present and still not stop anything:
 
-The four local routes represent a function tool, a hosted-tool stand-in, a specialist handoff, and a recovery step. Each runs twice: once with a matching approval token and once without it. The receiver, not the route's own status label, determines whether the effect occurred. An optional all-wired run puts the same approval check in front of every route and gives the detector a conformant comparison.
+- **The route skips the check.** The hosted-tool stand-in reaches the effect without passing through approval (`PATH_UNMEDIATED`).
+- **The check only warns.** The specialist handoff records a warning when approval is missing, and the effect happens anyway (`WARN_ONLY`).
+- **The check runs too late.** The recovery step evaluates the run only after the effect has already occurred (`EVALUATED_POST_EFFECT`).
 
-There is no network, provider SDK, external message, real target, or platform emulator. These are deliberately small stand-ins for a path-inspection method, not a security product or a claim about any named agent framework. The known path list is complete only for this tiny example.
+Each route runs twice: once with a matching approval token and once without it. The receiver, not the route's own status label, determines whether the effect occurred, so each route is judged by what reached the receiver rather than by what it reports. An optional all-wired run puts the same approval check in front of every route and gives the detector a conformant comparison.
 
-The essay explains the original assumption, the correction to the first detector, the relevant prior art, and how to apply the question to a real system without mistaking this example for platform coverage.
+These are deliberately small stand-ins for a path-inspection method, not a security product or a claim about any named agent framework. The known path list is complete only for this tiny example.
 
 ## Run it
 
@@ -25,21 +27,11 @@ python3 -m unittest -v                     # 5 receiver tests plus 16 detector c
 python3 test_assay.py                      # lists each detector case: 16/16, 13 hostile
 ```
 
-**Start with the first command.** You should see three of four routes reported nonconforming; add `--all-wired` and all four turn conformant. The first command includes this excerpt from its actual output:
+**Start with the first command.** You should see `"validation": "VALID"`, `"conformance": "NON_CONFORMANT"`, and one finding for each of the three routes above. Add `--all-wired` and all four turn conformant.
 
-```json
-  "conformance": "NON_CONFORMANT",
-  "defects": [],
-  "findings": [
-    {
-      "path": "hosted_surrogate",
-      "state": "PATH_UNMEDIATED"
-    },
-```
+`VALID` means the local fixture passed its checks; `CONFORMANT` means every listed route enforced approval before the effect. One does not imply the other. Malformed input (not a JSON object, a path that isn't an object, and so on) classifies as `INVALID` with a defect code rather than crashing, which is why a well-formed run shows an empty `defects` list.
 
-`VALID` means the local fixture passed its checks; `CONFORMANT` means every listed route enforced approval before the effect. One does not imply the other. Malformed input (not a JSON object, a path that isn't an object, and so on) classifies as `INVALID` with a defect code rather than crashing.
-
-`fixture.json` is a synthetic registered-path fixture. It is not a trace from a real agent runtime. Its paired runs (one with approval, one without; called *twins* in the code) and evidence match what `demo.py` generates (a test checks this); its descriptive metadata (assay id, receiver name, discovery methods) is the hand-written registered form and differs on purpose. `validate_assay.py` checks each twin's ordered local events and outcome rather than trusting a declared state label or an aggregate event list alone. The first detector trusted failure labels; this version also refuses a false green when an allowed run bypasses the control or reaches it after the effect. It still knows only the four paths in this example.
+`fixture.json` is a synthetic registered-path fixture, not a trace from a real agent runtime. Its paired runs (one with approval, one without; called *twins* in the code) and evidence match what `demo.py` generates, and a test checks this; its descriptive metadata is the hand-written registered form and differs on purpose. `validate_assay.py` checks each twin's ordered local events and outcome rather than trusting a declared state label or an aggregate event list alone, so it refuses a false green when an allowed run bypasses the control or reaches it after the effect. It still knows only the four paths in this example.
 
 Copyright © 2026 Rob Hunter. Original code is released under the MIT license in `LICENSE`; references to third-party frameworks in the essay are for context, not an affiliation or validation claim.
 
